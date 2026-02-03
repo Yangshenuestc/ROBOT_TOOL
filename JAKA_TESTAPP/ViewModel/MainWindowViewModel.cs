@@ -46,7 +46,7 @@ namespace JAKA_TESTAPP.ViewModel
             GripperOpenCommand = new RelayCommand(async _ => await SafeExecute(r=> r.GripperMove(1000,30,50)));
             GripperCloseCommand = new RelayCommand(async _ => await SafeExecute(r => r.GripperMove(0,30,50)));
             GripperInitCommand = new RelayCommand(async _ =>await SafeExecute(r => r.GripperInitialize()));
-
+            
             // 初始化定时器
             _monitorTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _monitorTimer.Tick += (s, e) => UpdateState();
