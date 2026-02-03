@@ -315,8 +315,8 @@ namespace JAKA_TESTAPP
         public async Task MoveL(double X, double Y, double Z, double RX, double RY, double RZ)
         {
             double[] endPos = { X, Y, Z, RX, RY, RZ };
-            double speed = 20;
-            double accel = 10;
+            double speed = 40;
+            double accel = 50;
             var cmd = new
             {
                 cmdName = "moveL",
@@ -347,10 +347,12 @@ namespace JAKA_TESTAPP
         }
         public async Task Home_Move()
         {
+            _motionCts?.Dispose();
+            _motionCts = new CancellationTokenSource();
             double[] SafePos = CurrentState.ActualPosition.ToArray();
-            SafePos[2] = 350;
-            double[] homePosition = { 500, 0, 350, 180, 0, -115 };
-            //double[] homePosition = { -200, -466.5, 118, 180, 0, 150 };
+            SafePos[2] = 300;
+            double[] homePosition = { -134.7,-253.5,300,180,0,45 };
+            //double[] homePosition = { 455.5, 166.1, 400, 180, 0, -134.5 };
             var cmd = new
             {
                 cmdName = "end_move",
@@ -372,7 +374,11 @@ namespace JAKA_TESTAPP
         }
 
         // 停止运动
-        public void Stop() => SendCommand(new { cmdName = "stop_program" });
+        public void Stop()
+        {
+            SendCommand(new { cmdName = "stop_program" });
+            _motionCts?.Cancel();
+        }
 
         public void Dispose()
         {
@@ -389,24 +395,78 @@ namespace JAKA_TESTAPP
         //WorkTask
         public async Task WorkTask(double X, double Y, double Z, double RX, double RY, double RZ)
         {
-            double moveheight = 350;
-            double[] homePosition = { 500, 0, 350, 180, 0, -115 };
-            double[] SafePos = CurrentState.ActualPosition.ToArray();
+            try
+            {
+                double moveheight = 300;
+                double[] homePosition = { -134.7, -253.5, 300, 180, 0, 45 };
+                //打开夹爪并移动到物体上方
+                _pauseGate.Wait();
+                await GripperMove(1000, 30, 50);
+                _pauseGate.Wait();
+                await MoveL(X, Y, moveheight, RX, RY, RZ);
+                //向下移动并关闭夹爪
+                _pauseGate.Wait();
+                await MoveL(X, Y, Z, RX, RY, RZ);
+                _pauseGate.Wait();
+                await GripperMove(530, 30, 50);
+                await Task.Delay(500);
+                //移动到安全高度
+                _pauseGate.Wait();
+                await MoveL(X, Y, moveheight, RX, RY, RZ);
+                //移动到中转点上方
+                _pauseGate.Wait();
+                await MoveL(homePosition[0], homePosition[1], homePosition[2], homePosition[3], homePosition[4], homePosition[5]);
+                //下降并打开夹爪
+                _pauseGate.Wait();
+                await MoveL(homePosition[0], homePosition[1], 143, homePosition[3], homePosition[4], homePosition[5]);
+                _pauseGate.Wait();
+                await GripperMove(1000, 30, 50);
+                await Task.Delay(500);
+                //移动到目标点上方,并回到中转位置
+                _pauseGate.Wait();
+                await MoveL(homePosition[0], homePosition[1], homePosition[2], homePosition[3], homePosition[4], homePosition[5]);
+            }
+            catch (OperationCanceledException)
+            {
+                AddLog("任务流程已由用户手动停止。");
+                throw new Exception("任务流程已由用户手动停止。");
+                // 这里捕获异常，防止程序崩溃，同时优雅地结束 WorkTask
+            }
+            catch (Exception ex)
+            {
+                AddLog($"任务执行出错: {ex.Message}");
+            }
+        }
+        public async Task WorkTask1(double X, double Y, double Z, double RX, double RY, double RZ)
+        {
+            double moveheight = 300;
+            double[] homePosition = { -134.7, -253.5, 300, 180, 0, 45 };
             //打开夹爪并移动到物体上方
+            await WaitPauseGateAsync();
             await GripperMove(1000, 30, 50);
-            await TCP_Move(X,Y,moveheight,RX,RY,RZ);
+            await WaitPauseGateAsync();
+            await MoveL(X, Y, moveheight, RX, RY, RZ);
             //向下移动并关闭夹爪
-            await TCP_Move(X, Y, Z, RX, RY, RZ);
-            await GripperMove(0, 30, 50);
+            await WaitPauseGateAsync();
+            await MoveL(X, Y, Z, RX, RY, RZ);
+            await WaitPauseGateAsync();
+            await GripperMove(530, 30, 50);
+            await Task.Delay(500);
             //移动到安全高度
-            await TCP_Move(X, Y, moveheight, RX, RY, RZ);
+            await WaitPauseGateAsync();
+            await MoveL(X, Y, moveheight, RX, RY, RZ);
             //移动到中转点上方
-            await Home_Move();
+            await WaitPauseGateAsync();
+            await MoveL(homePosition[0], homePosition[1], homePosition[2], homePosition[3], homePosition[4], homePosition[5]);
             //下降并打开夹爪
-            await TCP_Move(homePosition[0], homePosition[1], Z, homePosition[3], homePosition[4], homePosition[5]);
+            await WaitPauseGateAsync();
+            await MoveL(homePosition[0], homePosition[1], 143, homePosition[3], homePosition[4], homePosition[5]);
+            await WaitPauseGateAsync();
             await GripperMove(1000, 30, 50);
+            await Task.Delay(500);
             //移动到目标点上方,并回到中转位置
-            await Home_Move();
+            await WaitPauseGateAsync();
+            await MoveL(homePosition[0], homePosition[1], homePosition[2], homePosition[3], homePosition[4], homePosition[5]);
         }
         //选择工具坐标系
         public async Task SetCurrentToolId(int id)
@@ -548,6 +608,11 @@ namespace JAKA_TESTAPP
 
             while (!CurrentState.Inpos)
             {
+                if (_motionCts != null && _motionCts.Token.IsCancellationRequested)
+                {
+                    AddLog("检测到停止信号，终止后续任务！");
+                    throw new OperationCanceledException(); // 抛出异常，中断 WorkTask
+                }
                 if (!string.IsNullOrWhiteSpace(CurrentState.Errmsg))
                 {
                     AddLog($"机器人发生内部错误，错误信息: {CurrentState.Errmsg}");
@@ -574,7 +639,7 @@ namespace JAKA_TESTAPP
                     throw new TimeoutException("TIMEOUT: 等待运动到位超时！");
                 }
             }
-            await Task.Delay(1000);
+            await Task.Delay(200);
             AddLog("机器人已到位!");
         }
         #endregion      
@@ -731,6 +796,7 @@ namespace JAKA_TESTAPP
             AddLog("正在暂停程序...");
             try
             {
+                _pauseGate.Reset();
                 SendCommand(new { cmdName = "pause_program" });
                 await Task.Delay(1000);
                 if (CurrentState.Paused == true)
@@ -761,6 +827,7 @@ namespace JAKA_TESTAPP
                 if (CurrentState.Paused == false)
                 {
                     //statemessage = "程序恢复成功！";
+                    _pauseGate.Set();
                     AddLog("程序恢复成功！");
                 }
                 else
@@ -899,7 +966,14 @@ namespace JAKA_TESTAPP
             // (3) 设置位置 (地址 0x0103)
             byte[] framePos = BuildModbusRTUWriteSingle(_gripperSlaveId, 0x0103, (ushort)position);
             SendTioRsCommand(framePos);
-            await Task.Delay(2000);
+            if (_motionCts != null)
+            {
+                await Task.Delay(1500, _motionCts.Token); // 如果 Token 被 Cancel，这里会直接抛出异常，跳出 WorkTask
+            }
+            else
+            {
+                await Task.Delay(1500);
+            }
             AddLog($"夹爪动作: Pos={position / 10.0}%, Force={force}%, Speed={speed}%");
         }
         //辅助函数
@@ -945,6 +1019,27 @@ namespace JAKA_TESTAPP
 
                 // Modbus CRC 是低字节在前，高字节在后
                 return new byte[] { (byte)(crc & 0xFF), (byte)(crc >> 8) };
+            }
+        }
+        #endregion
+
+        #region 配合取消
+        // 在类成员定义区域添加
+        private CancellationTokenSource _motionCts; // 专门用于控制运动任务的取消令牌
+
+        #endregion
+
+        #region 配合暂停 (修复卡死)
+        // 保持原来的定义不变
+        private readonly ManualResetEventSlim _pauseGate = new ManualResetEventSlim(true);
+
+        // 【新增】异步等待方法，替代原本的 _pauseGate.Wait()
+        private async Task WaitPauseGateAsync()
+        {
+            // 如果处于暂停状态 (!IsSet)，则每隔 50 毫秒检查一次，且不阻塞当前线程
+            while (!_pauseGate.IsSet)
+            {
+                await Task.Delay(50);
             }
         }
         #endregion

@@ -12,6 +12,7 @@ namespace JAKA_TESTAPP.ViewModel
 
         public MainWindowViewModel()
         {
+
             // 初始化命令
             ConnectCommand = new RelayCommand(async _ =>
             {
@@ -19,19 +20,30 @@ namespace JAKA_TESTAPP.ViewModel
             });
             PowerOnCommand = new RelayCommand(async _ => await SafeExecute(r => r.PowerOn()));
             EnableCommand = new RelayCommand(async _ => await SafeExecute(r => r.EnableRobot()));
-            StopCommand = new RelayCommand(_ => _robot?.Stop());
+            StopCommand = new RelayCommand(_ =>
+            {
+                _robot?.Stop();
+            });
             RecoverCommand = new RelayCommand(async _ => await SafeExecute(r => r.Recover(r)));
             HomeCommand = new RelayCommand(async _ => await SafeExecute(r => r.Home_Move()));
-            PauseCommand = new RelayCommand(async _ => await SafeExecute(r => r.PauseProgram()));
-            ResumeCommand = new RelayCommand(async _ => await SafeExecute(r => r.ResumeProgram()));
+            PauseCommand = new RelayCommand(async _ =>
+            {
+                await SafeExecute(r => r.PauseProgram());
+            });
+
+            ResumeCommand = new RelayCommand(async _ =>
+            {
+                await SafeExecute(r => r.ResumeProgram());
+            });
             MoveToCoordinateCommand = new RelayCommand(async _ =>
             {
-                await SafeExecute(r => r.WorkTask(InputX, InputY, InputZ, InputRX, InputRY, InputRZ));
+                await SafeExecute(r => r.WorkTask1(InputX, InputY, InputZ, InputRX, InputRY, InputRZ));
                 IsValueLocked = false;
             });
             DirectMoveCommand = new RelayCommand(async _ =>
             {
-                await SafeExecute(r => r.TCP_Move(InputX, InputY, InputZ, InputRX, InputRY, InputRZ));
+                await SafeExecute(r => r.MoveL(InputX, InputY, InputZ, InputRX, InputRY, InputRZ));
+                //await SafeExecute(r => r.TCP_Move(InputX, InputY, InputZ, InputRX, InputRY, InputRZ));
                 IsValueLocked = false;
             });
             SetToolFrameCommand = new RelayCommand(async _ =>
@@ -39,14 +51,12 @@ namespace JAKA_TESTAPP.ViewModel
                 await SetTool();
                 IsValueLocked = false;
             });
-            GripperOpenCommand = new RelayCommand(async _ => await SafeExecute(r => r.GripperMove(1000, 30, 50)));
-            GripperCloseCommand = new RelayCommand(async _ => await SafeExecute(r => r.GripperMove(0, 30, 50)));
+            GripperOpenCommand = new RelayCommand(async _ => await SafeExecute(r => r.GripperMove(1000, 80, 50)));
+            GripperCloseCommand = new RelayCommand(async _ => await SafeExecute(r => r.GripperMove(0, 80, 50)));
             GripperInitCommand = new RelayCommand(async _ => await SafeExecute(r => r.GripperInitialize()));
             SetToolFrameCommand = new RelayCommand(async _ => await SetTool());
-            GripperOpenCommand = new RelayCommand(async _ => await SafeExecute(r=> r.GripperMove(1000,30,50)));
-            GripperCloseCommand = new RelayCommand(async _ => await SafeExecute(r => r.GripperMove(0,30,50)));
-            GripperInitCommand = new RelayCommand(async _ =>await SafeExecute(r => r.GripperInitialize()));
-            
+            GripperSetPosCommand = new RelayCommand(async _ => await SafeExecute(r => r.GripperMove(GripperPosInput, 80, 50)));
+
             // 初始化定时器
             _monitorTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             _monitorTimer.Tick += (s, e) => UpdateState();
@@ -54,8 +64,10 @@ namespace JAKA_TESTAPP.ViewModel
 
         #region 属性绑定 (Binding Properties)
         //机器人IP
-        private string _robotIp = "192.168.10.10";//jakaZu5
-        //private string _robotIp = "192.168.10.20";//jakaZu3
+        //private string _robotIp = "192.168.0.10";//jakaZu5(1)
+        //private string _robotIp = "192.168.0.20";//jakaZu3(1)
+        private string _robotIp = "192.168.0.30";//jakaZu5(2)
+        //private string _robotIp = "192.168.0.40";//jakaZu3(2)
         public string RobotIp { get => _robotIp; set => SetProperty(ref _robotIp, value); }
 
         //日志消息
@@ -166,6 +178,13 @@ namespace JAKA_TESTAPP.ViewModel
         {
             get => _inputRZ; set => SetProperty(ref _inputRZ, value);//目标点RZ
         }
+        //夹爪位置
+        private int _gripperPosInput = 500; // 默认值500
+        public int GripperPosInput
+        {
+            get => _gripperPosInput;
+            set => SetProperty(ref _gripperPosInput, value);
+        }
 
         //工具坐标系设置
         private int _currentToolIdDisplay = 0;
@@ -234,6 +253,7 @@ namespace JAKA_TESTAPP.ViewModel
         public ICommand GripperOpenCommand { get; }
         public ICommand GripperCloseCommand { get; }
         public ICommand GripperInitCommand { get; }
+        public ICommand GripperSetPosCommand { get; }
         public ICommand DirectMoveCommand { get; }
 
         #endregion
@@ -407,6 +427,11 @@ namespace JAKA_TESTAPP.ViewModel
                 StatusMsg = $"工具坐标系设置异常: {ex.Message}";
             }
         }
+        #endregion
+
+        #region 配合暂停
+        // 初始化为 true，代表默认是“绿灯”（通行状态）
+        private readonly ManualResetEventSlim _pauseGate = new ManualResetEventSlim(true);
         #endregion
     }
 }

@@ -190,6 +190,16 @@
                         <Button Content="Power on" Command="{Binding PowerOnCommand}" Width="105" Height="40" Margin="15,5" Background="GreenYellow" Style="{StaticResource TaskBtnStyle}"/>
                         <Button Content="Enable" Command="{Binding EnableCommand}" Width="105" Height="40" Margin="15,5" Background="GreenYellow" Style="{StaticResource TaskBtnStyle}"/>
                         <Button Content="Gripper Init" Command="{Binding GripperInitCommand}" Width="105" Height="40" Margin="15,5" Background="#00FFFF" ToolTip="发送Modbus初始化指令 (0x0100=1)" Style="{StaticResource TaskBtnStyle}"/>
+                        
+                        <Border BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Margin="15,5" Padding="5" Background="#F0F8FF">
+                            <StackPanel Orientation="Vertical" VerticalAlignment="Center">
+                                <TextBlock Text="Gripper Pos (0-1000)" FontSize="10" HorizontalAlignment="Center" Foreground="#555" Margin="0,0,0,2"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBox Text="{Binding GripperPosInput}" Width="60" Height="25" VerticalContentAlignment="Center" HorizontalContentAlignment="Center" Margin="0,0,5,0" Style="{StaticResource InputBoxStyle}"/>
+                                    <Button Content="Set" Command="{Binding GripperSetPosCommand}" Width="40" Height="25" Background="SkyBlue" Style="{StaticResource TaskBtnStyle}" Margin="0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                         <Button Content="Gripper Open" Command="{Binding GripperOpenCommand}" Width="105" Height="40" Margin="15,5" Background="SkyBlue" Style="{StaticResource TaskBtnStyle}"/>
                         <Button Content="Gripper Close" Command="{Binding GripperCloseCommand}" Width="105" Height="40" Margin="15,5" Background="SkyBlue" Style="{StaticResource TaskBtnStyle}"/>
                     </StackPanel>
